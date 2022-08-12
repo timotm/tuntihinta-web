@@ -1,11 +1,7 @@
-.container {
-  padding: 0 2rem;
-}
 
 .main {
-  min-height: 100vh;
-  padding: 4rem 0;
-  flex: 1;
+  width: 100%;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -15,10 +11,57 @@
 .footer {
   display: flex;
   flex: 1;
+  height: 0vh;
   padding: 2rem 0;
   border-top: 1px solid #eaeaea;
   justify-content: center;
   align-items: center;
+}
+
+.time {
+  position: relative;
+  height: 100%;
+  line-height: 100%;
+  font-size: 25vh;
+  text-align: right;
+}
+
+.price, .avgPrice {
+  position: relative;
+  font-size: 8vh;
+  text-align: right;
+}
+
+.price::before {
+  content: "Hinta nyt";
+  padding-right: 2rem;
+}
+
+.avgPrice::before {
+  content: "Keskihinta";
+  padding-right: 2rem;
+}
+
+.priceContainer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: left;
+}
+
+.timePriceContainer {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 0 1rem;
+}
+
+.chart {
+  position: relative;
+  height: 70vh;
+  width: 90vw;
 }
 
 .footer a {

@@ -1,70 +1,306 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
-import Image from 'next/image'
 import styles from '../styles/Home.module.css'
 
-const Home: NextPage = () => {
+import { Bar } from 'react-chartjs-2'
+
+import { Chart, CategoryScale, LinearScale, BarElement, ChartOptions, ChartData, ParsedDataType, TimeScale } from 'chart.js'
+import ChartDataLabels from 'chartjs-plugin-datalabels'
+import AnnotationPlugin, { AnnotationOptions } from 'chartjs-plugin-annotation'
+
+import S3 from 'aws-sdk/clients/s3'
+import { useEffect, useRef, useState } from 'react'
+
+Chart.register(CategoryScale, LinearScale, BarElement, TimeScale, ChartDataLabels, AnnotationPlugin, TimeScale)
+
+const colorDataPoint = (value: number): string => {
+  const colors = [
+    { upperLimit: 5.0, color: "#087E8B" },
+    { upperLimit: 20.0, color: "#FFE548" },
+    { upperLimit: 40.0, color: "#FFB20F" },
+    { upperLimit: 60.0, color: "#FF7F27" }
+  ]
+
+  const color = colors.find(({ upperLimit }) => value <= upperLimit) || { color: "#FF4B3E" }
+  return color.color
+}
+
+const leftPad = (value: number, pad: number = 2): string => `${value}`.padStart(pad, "0")
+
+const formatHHMM = (date: Date): string => `${leftPad(date.getHours())}.${leftPad(date.getMinutes())}`
+const formatHH = (date: Date): string => `${leftPad(date.getHours())}`
+
+const finnishDate = (date: Date): string => date.toLocaleDateString('sv-SE', { timeZone: "Europe/Helsinki" })
+const finnishWeekday = (date: Date): string => date.toLocaleDateString('fi-FI', { weekday: 'long', timeZone: "Europe/Helsinki" })
+interface DayPrice {
+  date: string,
+  hourPrices: {
+    startTime: string,
+    price: number
+  }[]
+}
+
+const isFulfilled = <T,>(v: PromiseSettledResult<T>): v is PromiseFulfilledResult<T> => v.status === "fulfilled"
+
+export async function getStaticProps(): Promise<{
+  props: {
+    data: ChartData<"bar", ParsedDataType<"bar">[]>,
+  }
+}> {
+  const s3 = new S3({
+    accessKeyId: process.env.TH_AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.TH_AWS_SECRET_ACCESS_KEY,
+    region: process.env.TH_AWS_REGION,
+    apiVersion: '2006-03-01',
+  })
+
+  const now = new Date()
+  // yesterday (-1) .. tomorrow (+1)
+  const dateStrings = [-1, 0, 1]
+    .map(i => finnishDate(new Date(now.getTime() + i * 24 * 60 * 60 * 1000)))
+
+  const requests = dateStrings.map(date =>
+    s3.getObject({ Bucket: process.env.TH_AWS_BUCKET as string, Key: `${date}.json` }).promise()
+  )
+
+  const results: DayPrice[] = (await Promise.allSettled(requests))
+    .filter(isFulfilled)
+    .slice(-2)
+    .map(({ value }) => JSON.parse(value.Body?.toString() ?? '{hourPrices: []}'))
+
+  const dataset = results.flatMap(
+    ({ hourPrices }) => hourPrices
+      .map(e => ({ x: e.startTime, y: e.price * 1.24, label: (e.price * 1.24).toFixed(0) }))
+  )
+
+  return {
+    props: {
+      data: {
+        datasets: [{
+          backgroundColor: dataset.map(({ y }) => colorDataPoint(y)),
+          data: dataset as unknown as ParsedDataType<"bar">[], // TODO: how to use string x?
+          datalabels: {
+            anchor: 'end',
+            align: 'end',
+          }
+        }]
+      },
+    }
+  }
+}
+
+
+const findCurrentTimeIndex = (data: { x: string }[]) => {
+  const now = new Date()
+  const currentTimeIndex = data.findIndex(({ x }) => {
+    const startTime = new Date(x)
+    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000)
+    return now >= startTime && now < endTime
+  })
+  return currentTimeIndex
+}
+
+const maxPrice = 100
+
+const annotateCurrentTime = (darkMode: boolean, data: ChartData<"bar", ParsedDataType<"bar">[]>): AnnotationOptions | null => {
+  const currentIndex = findCurrentTimeIndex(data.datasets[0].data as unknown as { x: string }[]) // TODO: how to use string x?
+
+  if (currentIndex === -1) {
+    return null
+  }
+  return {
+    type: 'box',
+    xMin: currentIndex - 0.5,
+    xMax: currentIndex + 0.5,
+    yMin: 0,
+    yMax: maxPrice,
+    backgroundColor: darkMode ? 'rgba(255,255,255, 0.3)' : 'rgba(205, 237, 246, 0.45)',
+    borderWidth: 0,
+  }
+}
+
+const annotateDayChanges = (darkMode: boolean, data: ChartData<"bar", ParsedDataType<"bar">[]>): AnnotationOptions[] => {
+  interface accumulator {
+    lastDate: string,
+    indices: number[],
+  }
+
+  const foo = data.datasets[0].data.reduce((acc: accumulator, { x }, i) => {
+    const date = finnishDate(new Date(x))
+    if (acc.lastDate !== date) {
+      if (acc.lastDate) {
+        acc.indices.push(i)
+      }
+      acc.lastDate = date
+    }
+    return acc
+  }, { lastDate: '', indices: [] })
+
+  const a1: AnnotationOptions[] = foo.indices.map(i => ({
+    type: 'line',
+    yMin: 0,
+    yMax: maxPrice,
+    xMin: i - 0.5,
+    xMax: i - 0.5,
+    borderColor: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+  }))
+
+  if (data.datasets[0].data.length > 0) {
+    const a2: AnnotationOptions[] = [0, ...foo.indices].map(i => ({
+      type: 'label',
+      xValue: i + 1,
+      position: 'start',
+      yValue: maxPrice - 1,
+      content: `${finnishWeekday(new Date(data.datasets[0].data[i].x))}`,
+      color: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+    })).slice(0, -1)
+
+    return a1.concat(a2)
+  }
+  return a1
+}
+
+const collectAnnotations = (darkMode: boolean, data: ChartData<"bar", ParsedDataType<"bar">[]>): { [key: string]: AnnotationOptions } => {
+  let annotations: { [key: string]: AnnotationOptions } = {}
+
+  const currentTimeAnnotation = annotateCurrentTime(darkMode, data)
+  const dayChanges = annotateDayChanges(darkMode, data)
+
+  if (currentTimeAnnotation) {
+    annotations['currentTime'] = currentTimeAnnotation
+  }
+
+  for (const [index, dayChange] of dayChanges.entries()) {
+    annotations[`dayChange${index}`] = dayChange
+  }
+
+  return annotations
+}
+
+const darkModeMediaQuery = (window: Window) => window.matchMedia('(prefers-color-scheme: dark)')
+
+const getCurrentPrice = (data: ChartData<"bar", ParsedDataType<"bar">[]>): string => {
+  const currentIndex = findCurrentTimeIndex(data.datasets[0].data as unknown as { x: string }[]) // TODO: how to use string x?
+  if (currentIndex === -1) {
+    return '-'
+  }
+  return (data.datasets[0].data[currentIndex].y).toFixed(2)
+}
+
+type IntervalFunction = () => void
+
+function useInterval(callback: IntervalFunction, delay: number) {
+
+  const savedCallback = useRef<IntervalFunction | null>(null)
+
+  // Remember the latest callback.
+  useEffect(() => {
+    savedCallback.current = callback
+  })
+
+  // Set up the interval.
+  useEffect(() => {
+    function tick() {
+      if (savedCallback.current !== null) {
+        savedCallback.current()
+      }
+    }
+    const id = setInterval(tick, delay)
+    return () => clearInterval(id)
+
+  }, [delay])
+}
+
+const dateIncludedInData = (data: ChartData<"bar", ParsedDataType<"bar">[]>, date: Date): Boolean => {
+  return undefined != data.datasets[0].data.find(({ x }) => x.slice(0, 10) === date.toISOString().slice(0, 10))
+}
+
+const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ data }) => {
+  const [time, setTime] = useState(new Date())
+  const [darkMode, setDarkMode] = useState(false)
+  const [currentPrice, setCurrentPrice] = useState(getCurrentPrice(data))
+  useInterval(() => {
+    if (time.getHours() >= 14 &&
+      time.getHours() < 16 &&
+      !dateIncludedInData(data, time)) {
+      window.location.reload()
+    }
+
+  }, 1000 * 60 * 15)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTime(new Date())
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    setDarkMode(darkModeMediaQuery(window).matches)
+    const handler = (e: MediaQueryListEvent) => setDarkMode(e.matches)
+    darkModeMediaQuery(window).addEventListener('change', handler)
+    return () => window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', handler)
+  }, [])
+
+  useEffect(() => {
+    setCurrentPrice(getCurrentPrice(data))
+  }, [data, time])
+
+  const annotations = collectAnnotations(darkMode, data)
+
+  const options: ChartOptions<'bar'> = {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      annotation: {
+        annotations
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          callback: function (value, _index, _ticks) {
+            const d = new Date(this.getLabelForValue(value as number))
+            return d.getHours() % 2 == 0 ? formatHH(d) : ''
+          },
+          maxRotation: 0
+        },
+        grid: {
+          color: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+        },
+      },
+      y: {
+        type: 'linear',
+        min: 0,
+        max: maxPrice,
+        grid: {
+          color: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+        },
+      },
+    }
+  }
+
   return (
     <div className={styles.container}>
       <Head>
-        <title>Create Next App</title>
-        <meta name="description" content="Generated by create next app" />
+        <title>Tuntihinnat</title>
+        <meta name="description" content="Sähkön tuntihinnat Suomessa" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
       <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.tsx</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h2>Documentation &rarr;</h2>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h2>Learn &rarr;</h2>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/canary/examples"
-            className={styles.card}
-          >
-            <h2>Examples &rarr;</h2>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h2>Deploy &rarr;</h2>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
+        <div className={styles.mainContainer}>
+          <div className={styles.timePriceContainer}>
+            <div className={styles.time}>{formatHHMM(time)}</div>
+            <div className={styles.priceContainer}>
+              <div className={styles.price}>{currentPrice}</div>
+              <div className={styles.avgPrice}>{(data.datasets[0].data.reduce((acc, { y }) => acc + y, 0) / data.datasets[0].data.length).toFixed(2)}</div>
+            </div>
+          </div>
+          <Bar className={styles.chart} data={data} options={options} />
         </div>
       </main>
 
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <span className={styles.logo}>
-            <Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />
-          </span>
-        </a>
-      </footer>
     </div>
   )
 }
