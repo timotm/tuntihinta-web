@@ -153,7 +153,7 @@ const annotateDayChanges = (darkMode: boolean, data: ChartData<"bar", ParsedData
       yValue: maxPrice - 1,
       content: `${finnishWeekday(new Date(data.datasets[0].data[i].x))}`,
       color: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
-    })).slice(0, -1)
+    })).slice(0, -1) as any // TODO: fix type
 
     return a1.concat(a2)
   }
@@ -170,9 +170,10 @@ const collectAnnotations = (darkMode: boolean, data: ChartData<"bar", ParsedData
     annotations['currentTime'] = currentTimeAnnotation
   }
 
-  for (const [index, dayChange] of dayChanges.entries()) {
-    annotations[`dayChange${index}`] = dayChange
-  }
+  dayChanges.forEach((a, i) => {
+//  for (const [index, dayChange] of dayChanges.entries()) {
+    annotations[`dayChange${i}`] = a
+  })
 
   return annotations
 }
@@ -212,7 +213,7 @@ function useInterval(callback: IntervalFunction, delay: number) {
 }
 
 const dateIncludedInData = (data: ChartData<"bar", ParsedDataType<"bar">[]>, date: Date): Boolean => {
-  return undefined != data.datasets[0].data.find(({ x }) => x.slice(0, 10) === date.toISOString().slice(0, 10))
+  return undefined != (data.datasets[0].data as unknown as { x: string }[]).find(({ x }) => x.slice(0, 10) === date.toISOString().slice(0, 10))
 }
 
 const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ data }) => {
