@@ -171,7 +171,7 @@ const collectAnnotations = (darkMode: boolean, data: ChartData<"bar", ParsedData
   }
 
   dayChanges.forEach((a, i) => {
-//  for (const [index, dayChange] of dayChanges.entries()) {
+    //  for (const [index, dayChange] of dayChanges.entries()) {
     annotations[`dayChange${i}`] = a
   })
 
@@ -213,7 +213,7 @@ function useInterval(callback: IntervalFunction, delay: number) {
 }
 
 const dateIncludedInData = (data: ChartData<"bar", ParsedDataType<"bar">[]>, date: Date): Boolean => {
-  return undefined != (data.datasets[0].data as unknown as { x: string }[]).find(({ x }) => x.slice(0, 10) === date.toISOString().slice(0, 10))
+  return (data.datasets[0].data as unknown as { x: string }[]).filter(({ x }) => x.slice(0, 10) === date.toISOString().slice(0, 10)).length > 2
 }
 
 const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ data }) => {
@@ -222,11 +222,12 @@ const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ d
   const [currentPrice, setCurrentPrice] = useState(getCurrentPrice(data))
   useInterval(() => {
     if (time.getHours() >= 14 &&
-      time.getHours() < 16 &&
-      !dateIncludedInData(data, time)) {
-      window.location.reload()
+      time.getHours() < 16) {
+      const tomorrow = new Date(time.getTime() + 24 * 60 * 60 * 1000)
+      if (!dateIncludedInData(data, tomorrow)) {
+        window.location.reload()
+      }
     }
-
   }, 1000 * 60 * 15)
 
   useEffect(() => {
