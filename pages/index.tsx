@@ -1,7 +1,7 @@
 import type { NextPage } from 'next'
 import Head from 'next/head'
 import styles from '../styles/Home.module.css'
-
+import { Analytics } from '@vercel/analytics/react'
 import { Bar } from 'react-chartjs-2'
 
 import { Chart, CategoryScale, LinearScale, BarElement, ChartOptions, ChartData, ParsedDataType, TimeScale } from 'chart.js'
@@ -301,7 +301,7 @@ const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ d
           <Bar className={styles.chart} data={data} options={options} />
         </div>
       </main>
-
+      <Analytics />
     </div>
   )
 }
