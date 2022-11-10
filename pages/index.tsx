@@ -45,7 +45,8 @@ const isFulfilled = <T,>(v: PromiseSettledResult<T>): v is PromiseFulfilledResul
 export async function getStaticProps(): Promise<{
   props: {
     data: ChartData<"bar", ParsedDataType<"bar">[]>,
-  }
+  },
+  revalidate: number
 }> {
   const s3 = new S3({
     accessKeyId: process.env.TH_AWS_ACCESS_KEY_ID,
@@ -72,6 +73,17 @@ export async function getStaticProps(): Promise<{
     ({ hourPrices }) => hourPrices
       .map(e => ({ x: e.startTime, y: e.price * 1.24, label: (e.price * 1.24).toFixed(0) }))
   )
+  const lastStartTime = new Date(Date.parse(dataset.slice(-1)[0].x))
+  // new data is released at around 12 UTC
+  // So if we don't have tomorrow's data yet, refresh today. Otherwise tomorrow at noonish
+  const nextUpdate = new Date(now.getTime())
+  nextUpdate.setUTCHours(12, 0, 0, 0)
+  if (lastStartTime.getUTCDate() > now.getUTCDate() || lastStartTime.getUTCMonth() > now.getUTCMonth()) {
+    nextUpdate.setUTCDate(now.getUTCDate() + 1)
+  }
+
+  const dataValidForSeconds = Math.max(Math.floor((nextUpdate.getTime() - now.getTime()) / 1000), 60)
+
 
   return {
     props: {
@@ -85,7 +97,8 @@ export async function getStaticProps(): Promise<{
           }
         }]
       },
-    }
+    },
+    revalidate: dataValidForSeconds
   }
 }
 
