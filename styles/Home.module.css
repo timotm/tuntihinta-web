@@ -26,7 +26,7 @@
   text-align: right;
 }
 
-.price, .avgPrice {
+.price, .minAvgMaxPrice {
   position: relative;
   font-size: 8vh;
   text-align: right;
@@ -37,9 +37,8 @@
   padding-right: 2rem;
 }
 
-.avgPrice::before {
-  content: "Keskihinta";
-  padding-right: 2rem;
+.minAvgMaxPrice {
+  font-size: 6vh;
 }
 
 .priceContainer {

@@ -295,6 +295,10 @@ const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ d
     }
   }
 
+  const avg = (data.datasets[0].data.reduce((acc, { y }) => acc + y, 0) / data.datasets[0].data.length).toFixed(2)
+  const min = (data.datasets[0].data.reduce((acc, { y }) => Math.min(acc, y), 99999.99)).toFixed(2)
+  const max = (data.datasets[0].data.reduce((acc, { y }) => Math.max(acc, y), -99999.99)).toFixed(2)
+
   return (
     <div className={styles.container}>
       <Head>
@@ -309,7 +313,7 @@ const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ d
             <div className={styles.time}>{formatHHMM(time)}</div>
             <div className={styles.priceContainer}>
               <div className={styles.price}>{currentPrice}</div>
-              <div className={styles.avgPrice}>{(data.datasets[0].data.reduce((acc, { y }) => acc + y, 0) / data.datasets[0].data.length).toFixed(2)}</div>
+              <div className={styles.minAvgMaxPrice}>{min} / {avg} / {max}</div>
             </div>
           </div>
           <Bar className={styles.chart} data={data} options={options} />
