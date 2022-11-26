@@ -32,6 +32,7 @@ const formatHH = (date: Date): string => `${leftPad(date.getHours())}`
 
 const finnishDate = (date: Date): string => date.toLocaleDateString('sv-SE', { timeZone: "Europe/Helsinki" })
 const finnishWeekday = (date: Date): string => date.toLocaleDateString('fi-FI', { weekday: 'long', timeZone: "Europe/Helsinki" })
+
 interface DayPrice {
   date: string,
   hourPrices: {
@@ -40,11 +41,22 @@ interface DayPrice {
   }[]
 }
 
+type ChartDataType = ChartData<"bar", ParsedDataType<"bar">[]>
+
 const isFulfilled = <T,>(v: PromiseSettledResult<T>): v is PromiseFulfilledResult<T> => v.status === "fulfilled"
+
+const vatForHour = (hour: string): number => {
+  if (hour >= "2022-11-30T22:00:00Z" && hour <= "2023-04-31T22:00:00Z") {
+    return 1.10
+  }
+  else {
+    return 1.24
+  }
+}
 
 export async function getStaticProps(): Promise<{
   props: {
-    data: ChartData<"bar", ParsedDataType<"bar">[]>,
+    data: ChartDataType,
   },
   revalidate: number
 }> {
@@ -71,7 +83,7 @@ export async function getStaticProps(): Promise<{
 
   const dataset = results.flatMap(
     ({ hourPrices }) => hourPrices
-      .map(e => ({ x: e.startTime, y: e.price * 1.24, label: (e.price * 1.24).toFixed(0) }))
+      .map(e => ({ x: e.startTime, y: e.price * vatForHour(e.startTime), label: (e.price * vatForHour(e.startTime)).toFixed(0) }))
   )
   const lastStartTime = new Date(Date.parse(dataset.slice(-1)[0].x))
   // new data is released at around 12 UTC
@@ -115,7 +127,7 @@ const findCurrentTimeIndex = (data: { x: string }[]) => {
 
 const maxPrice = 100
 
-const annotateCurrentTime = (darkMode: boolean, data: ChartData<"bar", ParsedDataType<"bar">[]>): AnnotationOptions | null => {
+const annotateCurrentTime = (darkMode: boolean, data: ChartDataType): AnnotationOptions | null => {
   const currentIndex = findCurrentTimeIndex(data.datasets[0].data as unknown as { x: string }[]) // TODO: how to use string x?
 
   if (currentIndex === -1) {
@@ -132,7 +144,7 @@ const annotateCurrentTime = (darkMode: boolean, data: ChartData<"bar", ParsedDat
   }
 }
 
-const annotateDayChanges = (darkMode: boolean, data: ChartData<"bar", ParsedDataType<"bar">[]>): AnnotationOptions[] => {
+const annotateDayChanges = (darkMode: boolean, data: ChartDataType): AnnotationOptions[] => {
   interface accumulator {
     lastDate: string,
     indices: number[],
@@ -173,7 +185,7 @@ const annotateDayChanges = (darkMode: boolean, data: ChartData<"bar", ParsedData
   return a1
 }
 
-const collectAnnotations = (darkMode: boolean, data: ChartData<"bar", ParsedDataType<"bar">[]>): { [key: string]: AnnotationOptions } => {
+const collectAnnotations = (darkMode: boolean, data: ChartDataType): { [key: string]: AnnotationOptions } => {
   let annotations: { [key: string]: AnnotationOptions } = {}
 
   const currentTimeAnnotation = annotateCurrentTime(darkMode, data)
@@ -193,7 +205,7 @@ const collectAnnotations = (darkMode: boolean, data: ChartData<"bar", ParsedData
 
 const darkModeMediaQuery = (window: Window) => window.matchMedia('(prefers-color-scheme: dark)')
 
-const getCurrentPrice = (data: ChartData<"bar", ParsedDataType<"bar">[]>): string => {
+const getCurrentPrice = (data: ChartDataType): string => {
   const currentIndex = findCurrentTimeIndex(data.datasets[0].data as unknown as { x: string }[]) // TODO: how to use string x?
   if (currentIndex === -1) {
     return '-'
@@ -225,41 +237,35 @@ function useInterval(callback: IntervalFunction, delay: number) {
   }, [delay])
 }
 
-const dateIncludedInData = (data: ChartData<"bar", ParsedDataType<"bar">[]>, date: Date): Boolean => {
+const dateIncludedInData = (data: ChartDataType, date: Date): Boolean => {
   return (data.datasets[0].data as unknown as { x: string }[]).filter(({ x }) => x.slice(0, 10) === date.toISOString().slice(0, 10)).length > 2
 }
 
-const Home: NextPage<{ data: ChartData<"bar", ParsedDataType<"bar">[]> }> = ({ data }) => {
+const maybeRefreshData = (currentTime: Date, data: ChartDataType): void => {
+  if (currentTime.getUTCHours() >= 12) {
+    const tomorrow = new Date(currentTime.getTime() + 24 * 60 * 60 * 1000)
+    if (!dateIncludedInData(data, tomorrow)) {
+      window.location.reload()
+    }
+  }
+}
+
+const handleDarkMode = (setDarkMode: (arg: boolean) => void): () => void => {
+  setDarkMode(darkModeMediaQuery(window).matches)
+  const handler = (e: MediaQueryListEvent) => setDarkMode(e.matches)
+  darkModeMediaQuery(window).addEventListener('change', handler)
+  return () => window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', handler)
+}
+
+const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
   const [time, setTime] = useState(new Date())
   const [darkMode, setDarkMode] = useState(false)
   const [currentPrice, setCurrentPrice] = useState(getCurrentPrice(data))
-  useInterval(() => {
-    if (time.getHours() >= 14 &&
-      time.getHours() < 16) {
-      const tomorrow = new Date(time.getTime() + 24 * 60 * 60 * 1000)
-      if (!dateIncludedInData(data, tomorrow)) {
-        window.location.reload()
-      }
-    }
-  }, 1000 * 60 * 15)
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTime(new Date())
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [])
-
-  useEffect(() => {
-    setDarkMode(darkModeMediaQuery(window).matches)
-    const handler = (e: MediaQueryListEvent) => setDarkMode(e.matches)
-    darkModeMediaQuery(window).addEventListener('change', handler)
-    return () => window.matchMedia('(prefers-color-scheme: dark)').removeEventListener('change', handler)
-  }, [])
-
-  useEffect(() => {
-    setCurrentPrice(getCurrentPrice(data))
-  }, [data, time])
+  useInterval(() => maybeRefreshData(time, data), 1000 * 60)
+  useInterval(() => setTime(new Date()), 1000)
+  useEffect(() => handleDarkMode(setDarkMode), [])
+  useEffect(() => setCurrentPrice(getCurrentPrice(data)), [data, time])
 
   const annotations = collectAnnotations(darkMode, data)
 
