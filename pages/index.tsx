@@ -45,6 +45,15 @@ type ChartDataType = ChartData<"bar", ParsedDataType<"bar">[]>
 
 const isFulfilled = <T,>(v: PromiseSettledResult<T>): v is PromiseFulfilledResult<T> => v.status === "fulfilled"
 
+const vatForHour = (hour: string): number => {
+  if (hour >= "2022-11-30T22:00:00Z" && hour <= "2023-04-31T22:00:00Z") {
+    return 1.10
+  }
+  else {
+    return 1.24
+  }
+}
+
 export async function getStaticProps(): Promise<{
   props: {
     data: ChartDataType,
@@ -74,7 +83,7 @@ export async function getStaticProps(): Promise<{
 
   const dataset = results.flatMap(
     ({ hourPrices }) => hourPrices
-      .map(e => ({ x: e.startTime, y: e.price * 1.24, label: (e.price * 1.24).toFixed(0) }))
+      .map(e => ({ x: e.startTime, y: e.price * vatForHour(e.startTime), label: (e.price * vatForHour(e.startTime)).toFixed(0) }))
   )
   const lastStartTime = new Date(Date.parse(dataset.slice(-1)[0].x))
   // new data is released at around 12 UTC
