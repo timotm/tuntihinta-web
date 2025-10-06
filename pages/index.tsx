@@ -139,10 +139,6 @@ export async function getStaticProps(): Promise<{
         datasets: [{
           backgroundColor: dataset.map(({ y }) => colorDataPoint(y)),
           data: dataset as unknown as ParsedDataType<"bar">[], // TODO: how to use string x?
-          datalabels: {
-            anchor: 'end',
-            align: 'end',
-          }
         }]
       },
     },
@@ -311,6 +307,20 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
     plugins: {
       annotation: {
         annotations
+      },
+      datalabels: {
+        anchor: 'end',
+        align: 'end',
+        formatter: (value: any, context: any) => {
+          const currentValue = Math.round(value.y)
+          if (context.dataIndex > 0) {
+            const prevValue = Math.round(context.dataset.data[context.dataIndex - 1].y)
+            if (currentValue === prevValue) {
+              return null
+            }
+          }
+          return currentValue
+        }
       }
     },
     scales: {
@@ -318,7 +328,7 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
         ticks: {
           callback: function (value, _index, _ticks) {
             const d = new Date(this.getLabelForValue(value as number))
-            return d.getHours() % 2 == 0 ? formatHH(d) : ''
+            return (d.getHours() % 2 === 0 && d.getMinutes() === 0) ? formatHH(d) : ''
           },
           maxRotation: 0
         },
