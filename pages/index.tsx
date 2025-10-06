@@ -8,7 +8,7 @@ import { Chart, CategoryScale, LinearScale, BarElement, ChartOptions, ChartData,
 import ChartDataLabels from 'chartjs-plugin-datalabels'
 import AnnotationPlugin, { AnnotationOptions } from 'chartjs-plugin-annotation'
 
-import S3 from 'aws-sdk/clients/s3'
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import { useEffect, useRef, useState } from 'react'
 
 Chart.register(CategoryScale, LinearScale, BarElement, TimeScale, ChartDataLabels, AnnotationPlugin, TimeScale)
@@ -63,11 +63,12 @@ export async function getStaticProps(): Promise<{
   },
   revalidate: number
 }> {
-  const s3 = new S3({
-    accessKeyId: process.env.TH_AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.TH_AWS_SECRET_ACCESS_KEY,
+  const s3 = new S3Client({
+    credentials: {
+      accessKeyId: process.env.TH_AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.TH_AWS_SECRET_ACCESS_KEY!,
+    },
     region: process.env.TH_AWS_REGION,
-    apiVersion: '2006-03-01',
   })
 
   const now = new Date()
@@ -75,19 +76,51 @@ export async function getStaticProps(): Promise<{
   const dateStrings = [-1, 0, 1]
     .map(i => finnishDate(new Date(now.getTime() + i * 24 * 60 * 60 * 1000)))
 
-  const requests = dateStrings.map(date =>
-    s3.getObject({ Bucket: process.env.TH_AWS_BUCKET as string, Key: `${date}.json` }).promise()
-  )
+  const requests = dateStrings.map(async date => {
+    try {
+      const response = await s3.send(new GetObjectCommand({
+        Bucket: process.env.TH_AWS_BUCKET as string,
+        Key: `${date}.json`
+      }))
+      if (!response.Body) {
+        throw new Error('No body in response')
+      }
+      return await response.Body.transformToString()
+    } catch (error) {
+      console.error(`Failed to fetch ${date}.json:`, error)
+      throw error
+    }
+  })
 
   const results: DayPrice[] = (await Promise.allSettled(requests))
     .filter(isFulfilled)
     .slice(-2)
-    .map(({ value }) => JSON.parse(value.Body?.toString() ?? '{hourPrices: []}'))
+    .map(({ value }) => JSON.parse(value ?? '{hourPrices: []}'))
 
   const dataset = results.flatMap(
     ({ hourPrices }) => hourPrices
       .map(e => ({ x: e.startTime, y: e.price * vatForHour(e.startTime), label: (e.price * vatForHour(e.startTime)).toFixed(0) }))
   )
+
+  // Fallback if no data available
+  if (dataset.length === 0) {
+    return {
+      props: {
+        data: {
+          datasets: [{
+            backgroundColor: [],
+            data: [],
+            datalabels: {
+              anchor: 'end',
+              align: 'end',
+            }
+          }]
+        },
+      },
+      revalidate: 60
+    }
+  }
+
   const lastStartTime = new Date(Date.parse(dataset.slice(-1)[0].x))
   // new data is released at around 12 UTC
   // So if we don't have tomorrow's data yet, refresh today. Otherwise tomorrow at noonish
