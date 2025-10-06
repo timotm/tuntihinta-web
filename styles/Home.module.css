@@ -41,6 +41,15 @@
   font-size: 6vh;
 }
 
+.minAvgMaxPrice small {
+  font-size: 0.5em;
+  vertical-align: middle;
+}
+
+.minAvgMaxPrice small:not(:first-child) {
+  margin-left: 1.5em;
+}
+
 .priceContainer {
   position: relative;
   display: flex;

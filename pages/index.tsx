@@ -242,7 +242,7 @@ const getCurrentPrice = (data: ChartDataType): string => {
   if (currentIndex === -1) {
     return '-'
   }
-  return (data.datasets[0].data[currentIndex].y).toFixed(2)
+  return (data.datasets[0].data[currentIndex].y).toFixed(2).replace('.', ',')
 }
 
 type IntervalFunction = () => void
@@ -347,9 +347,9 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
     }
   }
 
-  const avg = (data.datasets[0].data.reduce((acc, { y }) => acc + y, 0) / data.datasets[0].data.length).toFixed(2)
-  const min = (data.datasets[0].data.reduce((acc, { y }) => Math.min(acc, y), 99999.99)).toFixed(2)
-  const max = (data.datasets[0].data.reduce((acc, { y }) => Math.max(acc, y), -99999.99)).toFixed(2)
+  const avg = (data.datasets[0].data.reduce((acc, { y }) => acc + y, 0) / data.datasets[0].data.length).toFixed(2).replace('.', ',')
+  const min = (data.datasets[0].data.reduce((acc, { y }) => Math.min(acc, y), 99999.99)).toFixed(2).replace('.', ',')
+  const max = (data.datasets[0].data.reduce((acc, { y }) => Math.max(acc, y), -99999.99)).toFixed(2).replace('.', ',')
 
   return (
     <div className={styles.container}>
@@ -365,7 +365,7 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
             <div className={styles.time}>{formatHHMM(time)}</div>
             <div className={styles.priceContainer}>
               <div className={styles.price}>{currentPrice}</div>
-              <div className={styles.minAvgMaxPrice}>{min} / {avg} / {max}</div>
+              <div className={styles.minAvgMaxPrice}><small>↓</small>{min} <small>~</small>{avg} <small>↑</small>{max}</div>
             </div>
           </div>
           <Bar className={styles.chart} data={data} options={options} />
