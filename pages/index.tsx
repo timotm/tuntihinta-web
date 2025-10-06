@@ -315,6 +315,12 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
   const options: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: true,
+    datasets: {
+      bar: {
+        barPercentage: 0.95,
+        categoryPercentage: 0.95
+      }
+    },
     plugins: {
       annotation: {
         annotations
