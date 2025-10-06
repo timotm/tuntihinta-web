@@ -301,6 +301,17 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
 
   const annotations = collectAnnotations(darkMode, data)
 
+  const getPriceCategory = (price: number): number => {
+    if (price < 0.5) return 0
+    if (price < 5) return 1
+    if (price <= 20) return 2
+    if (price <= 40) return 3
+    if (price <= 60) return 4
+    return 5
+  }
+
+  let lastShownCategory: number | null = null
+
   const options: ChartOptions<'bar'> = {
     responsive: true,
     maintainAspectRatio: true,
@@ -313,13 +324,14 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
         align: 'end',
         formatter: (value: any, context: any) => {
           const currentValue = Math.round(value.y)
-          if (context.dataIndex > 0) {
-            const prevValue = Math.round(context.dataset.data[context.dataIndex - 1].y)
-            if (currentValue === prevValue) {
-              return null
-            }
+          const currentCategory = getPriceCategory(currentValue)
+
+          if (lastShownCategory === null || currentCategory !== lastShownCategory) {
+            lastShownCategory = currentCategory
+            return currentValue
           }
-          return currentValue
+
+          return null
         }
       }
     },
