@@ -10,6 +10,7 @@ import AnnotationPlugin, { AnnotationOptions } from 'chartjs-plugin-annotation'
 
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3'
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/router'
 
 Chart.register(CategoryScale, LinearScale, BarElement, TimeScale, ChartDataLabels, AnnotationPlugin, TimeScale)
 
@@ -290,13 +291,26 @@ const handleDarkMode = (setDarkMode: (arg: boolean) => void): () => void => {
 }
 
 const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
+  const router = useRouter()
+  const { theme } = router.query
+
   const [time, setTime] = useState(new Date())
   const [darkMode, setDarkMode] = useState(false)
   const [currentPrice, setCurrentPrice] = useState(getCurrentPrice(data))
 
   useInterval(() => maybeRefreshData(time, data), 1000 * 60)
   useInterval(() => setTime(new Date()), 1000)
-  useEffect(() => handleDarkMode(setDarkMode), [])
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      setDarkMode(true)
+    } else if (theme === 'light') {
+      setDarkMode(false)
+    } else if (router.isReady) {
+      return handleDarkMode(setDarkMode)
+    }
+  }, [theme, router.isReady])
+
   useEffect(() => setCurrentPrice(getCurrentPrice(data)), [data, time])
 
   const annotations = collectAnnotations(darkMode, data)
@@ -370,7 +384,10 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
   const max = (data.datasets[0].data.reduce((acc, { y }) => Math.max(acc, y), -99999.99)).toFixed(2).replace('.', ',')
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} style={{
+      backgroundColor: darkMode ? '#000' : '#fff',
+      color: darkMode ? '#fff' : '#000'
+    }}>
       <Head>
         <title>Tuntihinnat</title>
         <meta name="description" content="Sähkön tuntihinnat Suomessa" />
