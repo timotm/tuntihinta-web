@@ -152,7 +152,7 @@ const findCurrentTimeIndex = (data: { x: string }[]) => {
   const now = new Date()
   const currentTimeIndex = data.findIndex(({ x }) => {
     const startTime = new Date(x)
-    const endTime = new Date(startTime.getTime() + 60 * 60 * 1000)
+    const endTime = new Date(startTime.getTime() + 60 * 15 * 1000)
     return now >= startTime && now < endTime
   })
   return currentTimeIndex
