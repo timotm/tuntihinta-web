@@ -328,6 +328,8 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
   }
 
   let lastShownCategory: number | null = null
+  let lastShownIndex: number = -1
+  const minLabelDistance = 8 // Show label at least every 8 bars (2 hours)
 
   const options: ChartOptions<'bar'> = {
     responsive: true,
@@ -348,9 +350,15 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
         formatter: (value: any, context: any) => {
           const currentValue = Math.round(value.y)
           const currentCategory = getPriceCategory(currentValue)
+          const currentIndex = context.dataIndex
 
-          if (lastShownCategory === null || currentCategory !== lastShownCategory) {
+          // Show label if category changed or enough bars have passed since last label
+          const categoryChanged = lastShownCategory !== null && currentCategory !== lastShownCategory
+          const enoughDistance = lastShownIndex === -1 || (currentIndex - lastShownIndex) >= minLabelDistance
+
+          if (categoryChanged || enoughDistance) {
             lastShownCategory = currentCategory
+            lastShownIndex = currentIndex
             return currentValue
           }
 
