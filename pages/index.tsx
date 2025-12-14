@@ -184,6 +184,7 @@ const annotateDayChanges = (darkMode: boolean, data: ChartDataType): AnnotationO
   }
 
   const foo = data.datasets[0].data.reduce((acc: accumulator, { x }, i) => {
+    if (x === null) return acc
     const date = finnishDate(new Date(x))
     if (acc.lastDate !== date) {
       if (acc.lastDate) {
@@ -209,7 +210,7 @@ const annotateDayChanges = (darkMode: boolean, data: ChartDataType): AnnotationO
       xValue: i + 1,
       position: 'start',
       yValue: maxPrice - 1,
-      content: `${finnishWeekday(new Date(data.datasets[0].data[i].x))}`,
+      content: `${data.datasets[0].data[i].x ? finnishWeekday(new Date(data.datasets[0].data[i].x!)) : ''}`,
       color: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
     })).slice(0, -1) as any // TODO: fix type
 
@@ -243,7 +244,9 @@ const getCurrentPrice = (data: ChartDataType): string => {
   if (currentIndex === -1) {
     return '-'
   }
-  return (data.datasets[0].data[currentIndex].y).toFixed(2).replace('.', ',')
+  const y = data.datasets[0].data[currentIndex].y
+  if (y === null) return '-'
+  return y.toFixed(2).replace('.', ',')
 }
 
 type IntervalFunction = () => void
@@ -379,9 +382,9 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
     }
   }
 
-  const avg = (data.datasets[0].data.reduce((acc, { y }) => acc + y, 0) / data.datasets[0].data.length).toFixed(2).replace('.', ',')
-  const min = (data.datasets[0].data.reduce((acc, { y }) => Math.min(acc, y), 99999.99)).toFixed(2).replace('.', ',')
-  const max = (data.datasets[0].data.reduce((acc, { y }) => Math.max(acc, y), -99999.99)).toFixed(2).replace('.', ',')
+  const avg = (data.datasets[0].data.reduce((acc, { y }) => acc + (y ?? 0), 0) / data.datasets[0].data.length).toFixed(2).replace('.', ',')
+  const min = (data.datasets[0].data.reduce((acc, { y }) => Math.min(acc, y ?? 99999.99), 99999.99)).toFixed(2).replace('.', ',')
+  const max = (data.datasets[0].data.reduce((acc, { y }) => Math.max(acc, y ?? -99999.99), -99999.99)).toFixed(2).replace('.', ',')
 
   return (
     <div className={styles.container} style={{
