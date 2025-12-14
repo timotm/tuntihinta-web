@@ -330,6 +330,7 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
   let lastShownCategory: number | null = null
   let lastShownIndex: number = -1
   const minLabelDistance = 8 // Show label at least every 8 bars (2 hours)
+  let lastXLabelHour: number = -999 // Track last shown x-axis label hour
 
   const options: ChartOptions<'bar'> = {
     responsive: true,
@@ -371,9 +372,22 @@ const Home: NextPage<{ data: ChartDataType }> = ({ data }) => {
         ticks: {
           callback: function (value, _index, _ticks) {
             const d = new Date(this.getLabelForValue(value as number))
-            return (d.getHours() % 2 === 0 && d.getMinutes() === 0) ? formatHH(d) : ''
+            const currentHour = d.getHours()
+            
+            // Show label at full hours, at least 2 hours apart
+            if (d.getMinutes() === 0) {
+              const hoursSinceLastLabel = lastXLabelHour === -999 ? 999 : 
+                ((currentHour - lastXLabelHour + 24) % 24)
+              
+              if (hoursSinceLastLabel >= 2) {
+                lastXLabelHour = currentHour
+                return formatHH(d)
+              }
+            }
+            return ''
           },
-          maxRotation: 0
+          maxRotation: 0,
+          autoSkip: false
         },
         grid: {
           color: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
